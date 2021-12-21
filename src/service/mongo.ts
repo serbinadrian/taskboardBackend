@@ -1,25 +1,7 @@
 import mongoose = require("mongoose");
 import {Card, listType} from "../interfaces/Card";
 import {User} from "../interfaces/User";
-import exp = require("constants");
-
-const cardSchema = new mongoose.Schema({
-    id: {
-        type: Number,
-        required: true
-    },
-    text: {
-        type: String,
-        required: true,
-        default: ''
-    },
-    list: {
-        type: Number,
-        required: true,
-        default: listType.ToDo
-    }
-}, {versionKey: false});
-const Cards = mongoose.model("Cards", cardSchema);
+import {Board} from "../interfaces/Board";
 
 const userSchema = new mongoose.Schema({
     id: {
@@ -41,7 +23,7 @@ const userSchema = new mongoose.Schema({
     },
     boards: {
         type: Array,
-        required:false
+        required: false
     }
 }, {versionKey: false});
 const Users = mongoose.model("Users", userSchema);
@@ -52,24 +34,104 @@ mongoose.connect("mongodb://localhost:27017/cards")
     })
     .catch(console.error);
 
-export const getCards = (callback: Function) => {
-    Cards.find({}, callback);
+export const getCards = (idOfBoard: number, owner: string, callback: Function) => {
+    Users.findOne({login: owner}, function (error: Error, foundUser: User) {
+        if (error){
+            console.error(error);
+            callback(false);
+            return;
+        }
+
+        if (foundUser.boards) {
+            foundUser.boards.forEach(foundBoard => {
+                if (foundBoard.id === idOfBoard) {
+                    if (!foundBoard.cards) {
+                        foundBoard.cards = [];
+                    }
+
+                    callback(foundBoard.cards);
+                }
+            });
+        }
+    });
 };
 
-export const addCard = (card: Card, callback: Function) => {
-    Cards.create(card)
-        .then(doc => {
-            callback(doc);
-        })
-        .catch(console.error);
+export const addCard = (card: Card, board: Board, callback: Function) => {
+    Users.findOne({login: board.owner}, function (error: Error, foundUser: User) {
+        if (error){
+            console.error(error);
+            callback(false);
+            return;
+        }
+
+        card.list = listType.ToDo;
+
+        if (foundUser.boards) {
+            foundUser.boards.forEach(foundBoard => {
+                if (foundBoard.id === board.id) {
+                    if (!foundBoard.cards) {
+                        foundBoard.cards = [];
+                    } else {
+                        card.id = foundBoard.cards.length;
+                    }
+
+                    foundBoard.cards.push(card);
+                }
+            });
+        }
+
+        Users.updateOne({login: board.owner}, {boards: foundUser.boards}, callback);
+    });
 };
 
-export const removeCard = (cardId: number, callback: Function) => {
-    Cards.deleteOne({id: cardId}, callback);
+export const removeCard = (cardId: number, board: Board, callback: Function) => {
+    Users.findOne({login: board.owner}, function (error: Error, foundUser: User) {
+        if (error){
+            console.error(error);
+            callback(false);
+            return;
+        }
+
+        if (foundUser.boards) {
+            foundUser.boards.forEach(foundBoard => {
+                if (foundBoard.id === board.id) {
+                    if (foundBoard.cards) {
+                        foundBoard.cards = foundBoard.cards.filter(foundCard => {
+                            return foundCard.id !== cardId;
+                        });
+                    }
+                }
+            });
+        }
+
+        Users.updateOne({login: board.owner}, {boards: foundUser.boards}, callback);
+    });
 };
 
-export const changeListOfCard = (card: Card, callback: Function) => {
-    Cards.updateOne({id: card.id}, {list: card.list}, callback);
+export const changeListOfCard = (card: Card, board:Board, callback: Function) => {
+    Users.findOne({login: board.owner}, function (error: Error, foundUser: User) {
+        if (error){
+            console.error(error);
+            callback(false);
+            return;
+        }
+
+        if (foundUser.boards) {
+            foundUser.boards.forEach(foundBoard => {
+                if (foundBoard.id === board.id) {
+                    if (foundBoard.cards) {
+                        foundBoard.cards.forEach(foundCard => {
+                           if (foundCard.id === card.id){
+                               foundCard.list = card.list;
+                           }
+                        });
+                    }
+                }
+            });
+        }
+
+        Users.updateOne({login: board.owner}, {boards: foundUser.boards}, callback);
+    });
 };
 
 export const getUser = (userCredits: User, callback: Function) => {
@@ -107,3 +169,55 @@ export const addUser = (user: User, callback: Function) => {
         });
     });
 };
+
+export const addBoardToDataBase = (board: Board, callback: Function) => {
+    Users.findOne({login: board.owner}, function (error: Error, foundUser: User) {
+        if (error) {
+            console.log(error);
+            callback(false);
+            return;
+        }
+
+        if (!foundUser.boards) {
+            foundUser.boards = new Array<Board>();
+        } else {
+            board.id = foundUser.boards.length;
+        }
+
+        foundUser.boards.push(board);
+
+        Users.updateOne({login: foundUser.login}, {boards: foundUser.boards}, function (error: Error, updatedUser: User) {
+            if (error) {
+                console.error(error);
+            }
+
+            callback(updatedUser);
+        });
+    });
+};
+
+export const removeBoardFromDataBase = (board: Board, callback: Function) => {
+    Users.findOne({login: board.owner}, function (error: Error, foundUser: User) {
+        if (error) {
+            console.log(error);
+            callback(false);
+            return;
+        }
+
+        if (foundUser.boards) {
+            foundUser.boards = foundUser.boards.filter(foundBoard => {
+                return foundBoard.id !== board.id;
+            });
+
+            Users.updateOne({login: foundUser.login}, {boards: foundUser.boards}, function (error: Error, updatedUser: User) {
+                if (error) {
+                    console.error(error);
+                    callback(false);
+                    return;
+                }
+
+                callback(updatedUser);
+            });
+        }
+    });
+}

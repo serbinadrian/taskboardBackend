@@ -1,6 +1,7 @@
 import express = require('express');
-import {addCardToDataBase, getCardsFromDataBase, removeCardFromDataBase, updateCardList} from "./controllers/api";
+import {addCardToDataBase, getCardsFromDataBase, removeCardFromDataBase, updateCardList} from "./controllers/card";
 import {signInUser, signUpUser} from "./controllers/user";
+import {addBoard, removeBoard} from "./controllers/board";
 
 export const apiRouter = express.Router();
 
@@ -17,3 +18,7 @@ apiRouter.route('/user/signup')
 
 apiRouter.route('/user/signin')
     .post(signInUser);
+
+apiRouter.route('/boards')
+    .post(addBoard)
+    .delete(removeBoard);
